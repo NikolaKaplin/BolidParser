@@ -6,7 +6,7 @@ export class ParserController {
   constructor(private readonly parserService: ParserService) {}
 
   @Get()
-  getAllNews(): New[] {
-    return this.parserService.getAllNews();
+  async getAllNews(): Promise<New[]> {
+    return await this.parserService.getAllNews();
   }
 }
