@@ -3,10 +3,10 @@ import { Cron } from '@nestjs/schedule';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import 'dotenv/config';
-import * as fs from 'fs/promises';
 import { HttpProxyAgent } from 'http-proxy-agent';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import * as path from 'path';
+import { prisma } from 'prisma/prisma-client';
 
 @Injectable()
 export class ParserService {
@@ -63,11 +63,8 @@ export class ParserService {
   }
 
   async getAllNews(): Promise<New[]> {
-    const fileExists = await fs
-      .access(this.outDir)
-      .then(() => true)
-      .catch(() => false);
-    if (fileExists) return JSON.parse(await fs.readFile(this.outDir, 'utf8'));
+    const fileExists = await prisma.newsRecords.findMany();
+    if (fileExists) return fileExists;
 
     const pagesCount = await this.getPagesCount();
     const allHrefsArr = await this.getAllHrefs(pagesCount);
@@ -108,22 +105,44 @@ export class ParserService {
       if (!newPageInfo) continue;
       allRecords.push(newPageInfo);
     }
-    await fs.writeFile(
-      this.outDir,
-      JSON.stringify(allRecords, null, 2),
-      'utf8',
-    );
+    await prisma.$transaction(async (prisma) => {
+      for (let i = 0; i < allRecords.length; i++) {
+        await prisma.newsRecords.create({
+          data: {
+            slug: allRecords[i].slug ? allRecords[i].slug : '',
+            date: allRecords[i].date ? allRecords[i].date : '',
+            title: allRecords[i].title ? allRecords[i].title : '',
+            shortTitle: allRecords[i].shortTitle
+              ? allRecords[i].shortTitle
+              : '',
+            announcement: allRecords[i].announcement
+              ? allRecords[i].announcement
+              : '',
+            description: allRecords[i].description
+              ? allRecords[i].description
+              : '',
+            shortDescription: allRecords[i].shortDescription
+              ? allRecords[i].shortDescription
+              : '',
+            newsData: allRecords[i].newsData ? allRecords[i].newsData : '',
+            imageUrl: allRecords[i].imageUrl ? allRecords[i].imageUrl : '',
+            type: 'NEWS',
+            imagePreviewName: allRecords[i].imagePreviewName
+              ? allRecords[i].imagePreviewName
+              : '',
+          },
+        });
+        console.log(`record ${i} writed`);
+      }
+    });
     return allRecords;
   }
 
   private async CheckUpdates() {
-    const fileExists = await fs
-      .access(this.outDir)
-      .then(() => true)
-      .catch(() => false);
+    const fileExists = await prisma.newsRecords.findMany();
     if (!fileExists) await this.getAllNews();
-    const localNews = await fs.readFile(this.outDir, 'utf8');
-    const lastPostLocal: New = JSON.parse(localNews)[0];
+    const localNews: New[] = await prisma.newsRecords.findMany();
+    const lastPostLocal: New = localNews[0];
     const lastPostWeb: New = await this.axiosInstance
       .get(`${this.baseUrl}?curPos=0`)
       .then(async (response) => {
@@ -166,13 +185,9 @@ export class ParserService {
     if ((lastPostLocal.slug, lastPostWeb.slug)) {
       return 'Not updates';
     } else {
-      const formattedLocalNews: New[] = JSON.parse(localNews);
-      formattedLocalNews.unshift(lastPostWeb);
-      await fs.writeFile(
-        this.outDir,
-        JSON.stringify(formattedLocalNews, null, 2),
-        'utf8',
-      );
+      await prisma.newsRecords.create({
+        data: lastPostWeb,
+      });
       return 'Updated and file rewritten';
     }
   }

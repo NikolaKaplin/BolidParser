@@ -1,0 +1,33 @@
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+
+model NewsRecords {
+  id                Int     @id @default(autoincrement())
+  slug              String
+  date              String
+  title             String
+  shortTitle        String
+  newsData          String  @db.LongText
+  announcement      String
+  description       String  @db.LongText
+  shortDescription  String  @db.LongText
+  pdfFileUrl        String?
+  type              NewsArticleType
+  imageUrl          String
+  imagePreviewName  String?  @db.LongText
+}
+
+enum NewsArticleType {
+  NEWS
+  ARTICLE
+  ARTICLE_PDF_LINK
+  ARTICLE_PDF_FILE
+}
